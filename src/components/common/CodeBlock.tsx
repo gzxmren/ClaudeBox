@@ -1,5 +1,12 @@
 import { useEffect, useRef } from 'react'
 import hljs from 'highlight.js'
+import DOMPurify from 'dompurify'
+
+// highlight.js outputs spans with class names only — allow only span tags
+const PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['span'],
+  ALLOWED_ATTR: ['class'],
+}
 
 interface Props {
   code: string
@@ -17,8 +24,8 @@ export function CodeBlock({ code, language, maxHeight = '300px' }: Props) {
     codeRef.current.textContent = code
     if (language) {
       try {
-        const result = hljs.highlight(code, { language, ignoreIllegals: true })
-        codeRef.current.innerHTML = result.value
+        const result = hljs.highlight(code, { language, ignoreIllegals: false })
+        codeRef.current.innerHTML = DOMPurify.sanitize(result.value, PURIFY_CONFIG) as unknown as string
         codeRef.current.setAttribute('data-highlighted', 'yes')
         return
       } catch {

@@ -128,6 +128,27 @@ export function MessageBubble({ message, toolResults, onSubagentClick }: Props) 
   )
 }
 
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
+])
+const BASE64_RE = /^[A-Za-z0-9+/]+=*$/
+
+function buildImageSrc(block: { source: { type: string; media_type?: string; data?: string; url?: string } }): string | null {
+  if (block.source.type === 'base64') {
+    const mt = block.source.media_type || 'image/png'
+    const data = block.source.data || ''
+    if (!ALLOWED_IMAGE_TYPES.has(mt)) return null
+    if (!BASE64_RE.test(data)) return null
+    return `data:${mt};base64,${data}`
+  }
+  if (block.source.type === 'url') {
+    const url = block.source.url || ''
+    if (!/^https?:\/\//i.test(url)) return null
+    return url
+  }
+  return null
+}
+
 function ContentBlockRenderer({
   block,
   toolResults,
@@ -155,9 +176,7 @@ function ContentBlockRenderer({
     case 'tool_result':
       return null // Rendered as part of ToolCall
     case 'image': {
-      const src = block.source.type === 'base64'
-        ? `data:${block.source.media_type || 'image/png'};base64,${block.source.data}`
-        : block.source.url
+      const src = buildImageSrc(block)
       return src
         ? <img src={src} alt="Image content" className="max-w-full rounded-md my-2 max-h-[400px] object-contain" />
         : null

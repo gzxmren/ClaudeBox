@@ -12,6 +12,8 @@
     "server": "PORT=3501 node server.mjs"
   },
   "dependencies": {
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.3.3",
     "highlight.js": "^11.11.1",
     "immer": "^11.1.4",
     "react": "^19.2.4",
