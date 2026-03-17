@@ -25,14 +25,15 @@ export function MessageBubble({ message, toolResults, onSubagentClick }: Props) 
   // 10 lines at current font size (line-height ≈ 1.6)
   const collapseHeight = Math.round(messageFontSize * 1.6 * 10)
 
-  // Measure once after mount to determine if content exceeds 10 lines
+  // Compare natural scrollHeight against the collapse threshold.
+  // Using scrollHeight > collapseHeight (rather than > clientHeight) works in
+  // both collapsed and expanded states, since scrollHeight always reflects the
+  // full content height regardless of the maxHeight CSS constraint.
   useEffect(() => {
     if (contentRef.current) {
-      setOverflows(contentRef.current.scrollHeight > contentRef.current.clientHeight)
+      setOverflows(contentRef.current.scrollHeight > collapseHeight)
     }
-  // Re-measure if font size changes (clientHeight will change)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageFontSize])
+  }, [collapseHeight])
 
   // Check if this is a tool_result message (user record carrying tool results)
   const isToolResult = !isUser ? false : message.content.some(b => b.type === 'tool_result')

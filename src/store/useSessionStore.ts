@@ -43,7 +43,7 @@ interface SessionState {
   setSessionFilter: (filter: string) => void
   toggleTheme: () => void
   toggleSidebar: () => void
-  scrollToMessage: (messageId: string) => void
+  scrollToMessage: (messageId: string, delay?: number) => void
   setMessageFontSize: (size: number) => void
   getActiveSession: () => Session | null
   getUserQuestionsList: () => { id: string; text: string; timestamp: string }[]
@@ -124,6 +124,20 @@ export const useSessionStore = create<SessionState>()(
             s.activeSessionId = sessions[0].id
           }
         })
+        // Rebuild search index for the newly selected session
+        const state = get()
+        if (state.activeSessionId) {
+          const session = findSession(state.projects, state.activeSessionId)
+          if (session) {
+            const idx = buildSearchIndex(session.id, session.messages)
+            set(s => { s.searchIndex = idx })
+          }
+        }
+        // Rebuild global index to include newly imported sessions
+        const globalEntries = get().projects.flatMap(p =>
+          p.sessions.flatMap(s => buildSearchIndex(s.id, s.messages).entries)
+        )
+        set(s => { s.globalSearchIndex = { entries: globalEntries } })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
       }
@@ -199,17 +213,17 @@ export const useSessionStore = create<SessionState>()(
       if (typeof window !== 'undefined') localStorage.setItem('messageFontSize', String(clamped))
     }),
 
-    scrollToMessage: (messageId) => {
+    scrollToMessage: (messageId, delay = 50) => {
       set(s => { s.highlightedMessageId = messageId })
-      // Scroll to element
+      // Use a longer delay for cross-session navigation (session switch triggers
+      // a full MessageThread re-render; 50ms is not enough for large sessions).
       setTimeout(() => {
         const el = document.getElementById(`msg-${messageId}`)
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          // Clear highlight after animation
           setTimeout(() => set(s => { s.highlightedMessageId = null }), 2000)
         }
-      }, 50)
+      }, delay)
     },
 
     getActiveSession: () => {

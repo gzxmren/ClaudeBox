@@ -110,10 +110,14 @@ export function SearchPanel() {
                   <button
                     key={`${hit.messageId}-${i}`}
                     onClick={() => {
-                      if (globalSearchMode && hit.sessionId !== activeSessionId) {
+                      const crossSession = globalSearchMode && hit.sessionId !== activeSessionId
+                      if (crossSession) {
                         selectSession(hit.sessionId)
                       }
-                      scrollToMessage(hit.messageId)
+                      // Cross-session navigation requires React to re-render the entire
+                      // MessageThread before the target element exists in the DOM;
+                      // use a longer delay to avoid a missed getElementById lookup.
+                      scrollToMessage(hit.messageId, crossSession ? 300 : 50)
                     }}
                     className="w-full text-left px-4 py-2.5 border-b border-[var(--border)] hover:bg-[var(--bg-tertiary)] transition-colors"
                   >

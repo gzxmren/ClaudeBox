@@ -6,6 +6,8 @@ interface Props {
   session: Session
 }
 
+// Uses local timezone methods (getMonth/getDate/getHours) intentionally:
+// this is a local-only app and users expect to see times in their own timezone.
 function formatShortDate(ts: string): string {
   const d = new Date(ts)
   const month = d.getMonth() + 1
