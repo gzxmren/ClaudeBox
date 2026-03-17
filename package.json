@@ -4,11 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "start": "concurrently -n \"server,vite\" -c \"cyan,green\" \"PORT=3501 node server.mjs\" \"vite\"",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "node server.mjs",
-    "server": "node server.mjs"
+    "server": "PORT=3501 node server.mjs"
   },
   "dependencies": {
     "immer": "^11.1.4",
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

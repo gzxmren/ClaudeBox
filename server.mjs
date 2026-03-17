@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = parseInt(process.env.PORT || '3001', 10)
+const PORT = parseInt(process.env.PORT || '3501', 10)
 const CLAUDE_DIR = path.join(os.homedir(), '.claude', 'projects')
 const DIST_DIR = path.join(__dirname, 'dist')
 
