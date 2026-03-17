@@ -12,6 +12,10 @@ export function SearchPanel() {
   const searchResults = useSessionStore(s => s.searchResults)
   const scrollToMessage = useSessionStore(s => s.scrollToMessage)
   const getUserQuestionsList = useSessionStore(s => s.getUserQuestionsList)
+  const globalSearchMode = useSessionStore(s => s.globalSearchMode)
+  const toggleGlobalSearchMode = useSessionStore(s => s.toggleGlobalSearchMode)
+  const selectSession = useSessionStore(s => s.selectSession)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
 
   const questions = getUserQuestionsList()
   const filters: Array<{ label: string; value: 'all' | 'user' | 'assistant' | 'tool' }> = [
@@ -45,12 +49,25 @@ export function SearchPanel() {
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">
             {showingResults ? 'Search Results' : 'Message Index'}
           </h3>
-          <button
-            onClick={toggleSearchPanel}
-            className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleGlobalSearchMode}
+              title={globalSearchMode ? 'Switch to session search' : 'Switch to global search'}
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                globalSearchMode
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {globalSearchMode ? '🌐 Global' : '📄 Session'}
+            </button>
+            <button
+              onClick={toggleSearchPanel}
+              className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)]"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Search input */}
@@ -92,7 +109,12 @@ export function SearchPanel() {
                 {searchResults.map((hit, i) => (
                   <button
                     key={`${hit.messageId}-${i}`}
-                    onClick={() => scrollToMessage(hit.messageId)}
+                    onClick={() => {
+                      if (globalSearchMode && hit.sessionId !== activeSessionId) {
+                        selectSession(hit.sessionId)
+                      }
+                      scrollToMessage(hit.messageId)
+                    }}
                     className="w-full text-left px-4 py-2.5 border-b border-[var(--border)] hover:bg-[var(--bg-tertiary)] transition-colors"
                   >
                     <div className="flex items-center gap-2 mb-0.5">
@@ -103,7 +125,12 @@ export function SearchPanel() {
                       }`}>
                         {hit.role === 'user' ? 'User' : hit.role === 'assistant' ? 'Claude' : 'Tool'}
                       </span>
-                      <span className="text-[10px] text-[var(--text-muted)]">
+                      {globalSearchMode && (
+                        <span className="text-[10px] text-[var(--accent)] truncate max-w-[90px]" title={hit.sessionId}>
+                          {hit.sessionId.slice(0, 8)}…
+                        </span>
+                      )}
+                      <span className="text-[10px] text-[var(--text-muted)] ml-auto">
                         {formatTimestamp(hit.timestamp)}
                       </span>
                     </div>

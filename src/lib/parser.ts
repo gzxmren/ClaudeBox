@@ -39,7 +39,10 @@ export function mergeRecords(records: RawRecord[]): MergedMessage[] {
   const assistantGroups = new Map<string, AssistantRecord[]>()
   const assistantOrder: string[] = []
 
-  for (const rec of records) {
+  // Filter out sidechain records (abandoned branches from undo operations)
+  const mainRecords = records.filter(r => !r.isSidechain)
+
+  for (const rec of mainRecords) {
     if (rec.type === 'user') {
       const user = rec as UserRecord
       const { content, rawContent } = extractUserContent(user)

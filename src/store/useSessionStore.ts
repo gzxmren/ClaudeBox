@@ -18,11 +18,18 @@ interface SessionState {
   searchFilter: 'all' | 'user' | 'assistant' | 'tool'
   searchIndex: SearchIndex | null
   searchPanelOpen: boolean
+  // Global search (B1)
+  globalSearchMode: boolean
+  globalSearchIndex: SearchIndex | null
+
+  // Session filter (B2)
+  sessionFilter: string
 
   // UI
   theme: 'dark' | 'light'
   sidebarCollapsed: boolean
   highlightedMessageId: string | null
+  messageFontSize: number
 
   // Actions
   loadFromServer: () => Promise<void>
@@ -32,11 +39,15 @@ interface SessionState {
   setSearchQuery: (query: string) => void
   setSearchFilter: (filter: 'all' | 'user' | 'assistant' | 'tool') => void
   toggleSearchPanel: () => void
+  toggleGlobalSearchMode: () => void
+  setSessionFilter: (filter: string) => void
   toggleTheme: () => void
   toggleSidebar: () => void
   scrollToMessage: (messageId: string) => void
+  setMessageFontSize: (size: number) => void
   getActiveSession: () => Session | null
   getUserQuestionsList: () => { id: string; text: string; timestamp: string }[]
+  getFilteredProjects: () => Project[]
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -52,10 +63,15 @@ export const useSessionStore = create<SessionState>()(
     searchFilter: 'all',
     searchIndex: null,
     searchPanelOpen: false,
+    globalSearchMode: false,
+    globalSearchIndex: null,
+
+    sessionFilter: '',
 
     theme: (typeof window !== 'undefined' && localStorage.getItem('theme') as 'dark' | 'light') || 'dark',
     sidebarCollapsed: false,
     highlightedMessageId: null,
+    messageFontSize: (typeof window !== 'undefined' && Number(localStorage.getItem('messageFontSize'))) || 15,
 
     loadFromServer: async () => {
       set(s => { s.loading = true; s.error = null })
@@ -69,7 +85,7 @@ export const useSessionStore = create<SessionState>()(
             s.activeSessionId = projects[0].sessions[0].id
           }
         })
-        // Build search index for selected session
+        // Build search index for selected session + global index
         const state = get()
         if (state.activeSessionId) {
           const session = findSession(state.projects, state.activeSessionId)
@@ -78,6 +94,11 @@ export const useSessionStore = create<SessionState>()(
             set(s => { s.searchIndex = idx })
           }
         }
+        // Build global index across all sessions
+        const globalEntries = get().projects.flatMap(p =>
+          p.sessions.flatMap(s => buildSearchIndex(s.id, s.messages).entries)
+        )
+        set(s => { s.globalSearchIndex = { entries: globalEntries } })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
       }
@@ -132,21 +153,35 @@ export const useSessionStore = create<SessionState>()(
 
     setSearchQuery: (query) => {
       const state = get()
-      const results = state.searchIndex
-        ? doSearch(query, state.searchIndex, state.searchFilter)
+      const activeIndex = state.globalSearchMode ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex
+        ? doSearch(query, activeIndex, state.searchFilter)
         : []
       set(s => { s.searchQuery = query; s.searchResults = results })
     },
 
     setSearchFilter: (filter) => {
       const state = get()
-      const results = state.searchIndex
-        ? doSearch(state.searchQuery, state.searchIndex, filter)
+      const activeIndex = state.globalSearchMode ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex
+        ? doSearch(state.searchQuery, activeIndex, filter)
         : []
       set(s => { s.searchFilter = filter; s.searchResults = results })
     },
 
     toggleSearchPanel: () => set(s => { s.searchPanelOpen = !s.searchPanelOpen }),
+
+    toggleGlobalSearchMode: () => {
+      const state = get()
+      const next = !state.globalSearchMode
+      const activeIndex = next ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex && state.searchQuery
+        ? doSearch(state.searchQuery, activeIndex, state.searchFilter)
+        : []
+      set(s => { s.globalSearchMode = next; s.searchResults = results })
+    },
+
+    setSessionFilter: (filter) => set(s => { s.sessionFilter = filter }),
 
     toggleTheme: () => set(s => {
       s.theme = s.theme === 'dark' ? 'light' : 'dark'
@@ -157,6 +192,12 @@ export const useSessionStore = create<SessionState>()(
     }),
 
     toggleSidebar: () => set(s => { s.sidebarCollapsed = !s.sidebarCollapsed }),
+
+    setMessageFontSize: (size) => set(s => {
+      const clamped = Math.max(12, Math.min(24, size))
+      s.messageFontSize = clamped
+      if (typeof window !== 'undefined') localStorage.setItem('messageFontSize', String(clamped))
+    }),
 
     scrollToMessage: (messageId) => {
       set(s => { s.highlightedMessageId = messageId })
@@ -182,6 +223,21 @@ export const useSessionStore = create<SessionState>()(
       const session = state.getActiveSession()
       if (!session) return []
       return getUserQuestions(session.messages)
+    },
+
+    getFilteredProjects: () => {
+      const state = get()
+      const filter = state.sessionFilter.toLowerCase().trim()
+      if (!filter) return state.projects
+      return state.projects
+        .map(p => ({
+          ...p,
+          sessions: p.sessions.filter(s => {
+            const title = (s.slug || s.messages.find(m => m.role === 'user' && !m.content.some(b => b.type === 'tool_result'))?.rawContent || '').toLowerCase()
+            return title.includes(filter) || p.decodedPath.toLowerCase().includes(filter)
+          }),
+        }))
+        .filter(p => p.sessions.length > 0)
     },
   }))
 )

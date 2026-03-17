@@ -7,6 +7,8 @@ export function Header() {
   const searchPanelOpen = useSessionStore(s => s.searchPanelOpen)
   const theme = useSessionStore(s => s.theme)
   const loadFromFiles = useSessionStore(s => s.loadFromFiles)
+  const messageFontSize = useSessionStore(s => s.messageFontSize)
+  const setMessageFontSize = useSessionStore(s => s.setMessageFontSize)
 
   const handleFileImport = () => {
     const input = document.createElement('input')
@@ -56,6 +58,25 @@ export function Header() {
         >
           🔍 Search
         </button>
+
+        {/* Font size control */}
+        <div className="flex items-center gap-1 px-1">
+          <button
+            onClick={() => setMessageFontSize(messageFontSize - 1)}
+            className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+            title="Decrease font size"
+          >
+            A-
+          </button>
+          <span className="text-[10px] text-[var(--text-muted)] w-6 text-center">{messageFontSize}</span>
+          <button
+            onClick={() => setMessageFontSize(messageFontSize + 1)}
+            className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+            title="Increase font size"
+          >
+            A+
+          </button>
+        </div>
 
         <button
           onClick={toggleTheme}

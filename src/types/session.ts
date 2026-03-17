@@ -25,7 +25,17 @@ export interface ToolResultBlock {
   is_error?: boolean
 }
 
-export type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock
+export interface ImageBlock {
+  type: 'image'
+  source: {
+    type: 'base64' | 'url'
+    media_type?: string
+    data?: string
+    url?: string
+  }
+}
+
+export type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock | ImageBlock
 
 // Token usage
 export interface TokenUsage {

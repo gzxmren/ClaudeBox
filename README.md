@@ -1,73 +1,321 @@
-# React + TypeScript + Vite
+# Claude Session Viewer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个本地 Web 应用，用于可视化浏览、搜索和分析 Claude Code 的历史对话记录。
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 快速开始
 
-## React Compiler
+### 前置条件
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 18+
+- 已安装并使用过 Claude Code CLI（数据存储在 `~/.claude/projects/`）
 
-## Expanding the ESLint configuration
+### 安装与启动
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# 克隆或进入项目目录
+cd claudebox
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# 安装依赖
+npm install
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 启动（同时启动 API 服务器 + 前端开发服务器）
+npm start
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+启动后：
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| 服务 | 地址 |
+|------|------|
+| 前端界面 | http://localhost:5173 |
+| API 服务器 | http://localhost:3501 |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 生产模式运行
+
+```bash
+# 构建前端
+npm run build
+
+# 启动生产服务（前端 + API 合并在同一端口）
+npm run preview
+# 访问 http://localhost:3501
 ```
+
+---
+
+## 界面总览
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ☰  Claude Session Viewer      📂  🔍  A-  15  A+  ☀️/🌙                  │  ← 顶部导航栏
+├──────────────────┬───────────────────────────────────────────┬───────────────┤
+│                  │                                           │               │
+│  Sessions        │   对话内容区域（消息宽度 ≤ 50%）            │  搜索面板      │
+│  ──────────      │                                           │               │
+│  🔍 过滤会话...   │   [Main]  [Agent-1]  [Agent-2]           │  搜索结果      │
+│                  │                                           │  /问题索引     │
+│  ▾ 项目路径      │              ┌───────────────────────┐    │               │
+│    · 会话名称    │              │ **You**  14:32        │    │               │
+│      预览文本    │              │ 请帮我写一个排序算法    │    │               │
+│    · 会话名称    │              └───────────────────────┘    │               │
+│                  │   ┌───────────────────────┐               │               │
+│  ▾ 项目路径      │   │ **Claude**  14:32     │               │               │
+│    · ...         │   │ 当然！以下是快速排序... │               │               │
+│                  │   │ ↓ 展开全部            │               │               │
+│                  │   └───────────────────────┘               │               │
+└──────────────────┴───────────────────────────────────────────┴───────────────┘
+```
+
+---
+
+## 功能详解
+
+### 一、加载会话数据
+
+#### 自动加载
+
+应用启动后自动扫描 `~/.claude/projects/` 目录，将所有历史会话加载到左侧边栏。
+
+#### 手动导入 `.jsonl` 文件
+
+**方式一：拖拽**
+直接将 `.jsonl` 文件拖入浏览器窗口，松开后自动导入。
+
+**方式二：点击导入**
+点击顶部导航栏右侧的 **📎 图标**，通过文件选择器选取一个或多个 `.jsonl` 文件。
+
+> 导入的文件会归入左侧边栏的「Imported Sessions」分组，与本地会话并排显示。
+
+---
+
+### 二、浏览会话列表
+
+左侧边栏按**项目目录**分组展示所有会话。
+
+#### 过滤会话（B2 新功能）
+
+在侧边栏顶部的搜索框中输入关键词，实时过滤匹配的会话。支持按以下内容匹配：
+
+- 会话的首条用户消息内容
+- 项目路径名称
+
+点击右侧的 **✕** 清除过滤，恢复全量列表。
+
+#### 会话卡片信息
+
+每张卡片显示：
+
+| 字段 | 说明 |
+|------|------|
+| **主标题** | 会话名称（`slug`）优先；无名称时显示日期时间（如 `3/18 14:32`）+ 消息数 |
+| 预览 | 该会话第一条用户消息（灰色小字，截取前 60 字符） |
+| 元信息 | 日期时间、消息数、Token 消耗 |
+
+点击卡片即可在右侧主内容区打开对应会话。
+
+#### 折叠/展开项目组
+
+点击项目路径标题，可折叠或展开该项目下的所有会话。
+
+---
+
+### 三、阅读对话内容
+
+#### 消息气泡
+
+| 样式 | 含义 |
+|------|------|
+| 右对齐，蓝色发送者名 | 用户（**You**）消息 |
+| 左对齐，绿色发送者名 | Claude 消息 |
+
+- 每条气泡宽度**不超过内容区域的 50%**，保持双栏对话视觉清晰
+- 发送者名称（**You** / **Claude**）以粗体加大显示，一眼识别发送方
+- 每条消息气泡底部显示**时间戳**和**Token 用量**（输入 / 输出 / 缓存）
+
+#### 长消息折叠
+
+超过 **10 行**的消息默认折叠，底部显示渐隐效果：
+
+- 点击 **↓ 展开全部** 查看完整内容
+- 点击 **↑ 收起** 恢复折叠状态
+- 折叠高度随字体大小设置自动调整（始终对应 10 行文本）
+
+#### Markdown 渲染（B4 新功能）
+
+所有消息文本现已支持完整的 **GitHub Flavored Markdown** 渲染，包括：
+
+- **粗体**、*斜体*、~~删除线~~
+- `行内代码` 和代码块（带语法高亮）
+- 有序列表、无序列表
+- 表格
+- 引用块（`>`）
+- 标题（`#`、`##`、`###`）
+
+#### 代码语法高亮（B3 新功能）
+
+代码块支持自动语言检测并着色，深色/浅色主题下分别使用对应配色方案：
+
+- 深色主题：One Dark 风格
+- 浅色主题：GitHub 风格
+
+#### 思考过程（Thinking）
+
+Claude 的思考过程默认折叠，点击标题展开查看完整推理链。
+
+#### 工具调用
+
+每次工具调用以卡片形式内联显示，包含：
+
+- 工具类型图标和颜色标识（Bash 绿色、Read 蓝色、Edit 橙色等）
+- 调用参数（文件路径、命令、内容等）
+- 执行结果（超过 8 行时自动折叠，点击展开）
+- 错误结果以红色标注
+
+支持差异化展示的工具类型：
+
+`Bash` `Read` `Grep` `Glob` `Edit` `Write` `Agent` `SendMessage` `WebFetch` `WebSearch` `TodoWrite` `AskUserQuestion` `Skill` `NotebookEdit`
+
+---
+
+### 四、Subagent（子代理）对话
+
+当会话包含子代理任务时，消息区域顶部会出现 **Tab 标签栏**：
+
+- **Main** — 主对话线程
+- **Agent-xxx** — 各子代理的独立对话
+
+点击 Tab 切换查看；工具调用中的 Agent 链接也可直接跳转到对应 Tab。
+
+---
+
+### 五、会话统计信息
+
+打开会话后，消息区顶部显示统计栏：
+
+| 字段 | 说明 |
+|------|------|
+| Input / Output / Cache | Token 消耗量（自动换算 k/M 单位） |
+| 时长 | 会话持续时间 |
+| 消息数 | 总消息条数 |
+| 工具调用次数 | 工具使用总计 |
+| 📁 工作目录 | 会话发起时的工作路径 |
+| 🌿 Git 分支 | 会话发起时所在的 Git 分支 |
+
+---
+
+### 六、搜索功能
+
+#### 打开搜索面板
+
+- 快捷键：`Ctrl+F`（Windows/Linux）或 `Cmd+F`（macOS）
+- 点击消息区右侧边缘的 **🔍 按钮**
+
+#### 关闭搜索面板
+
+- 快捷键：`Escape`
+- 点击面板右上角的 **✕**
+
+#### 单 Session 搜索（默认模式）
+
+在搜索框输入关键词，实时返回当前会话中的匹配消息。
+
+**角色过滤：**
+
+| 按钮 | 搜索范围 |
+|------|---------|
+| All | 全部消息 |
+| User | 仅用户消息 |
+| Claude | 仅 Claude 回复 |
+| Tool | 仅工具调用结果 |
+
+每条搜索结果显示：角色标签、时间戳、命中内容的上下文片段（前后 40 字符）。
+
+点击结果条目，自动**滚动**到对应消息并**高亮**（2 秒后自动消失）。
+
+#### 跨 Session 全局搜索（B1 新功能）
+
+点击面板右上角的 **📄 Session** 按钮，切换为 **🌐 Global** 模式。
+
+全局搜索会在**所有已加载的会话**中检索，每条结果额外显示所属 Session ID 前缀。点击结果时，若目标不是当前会话，应用会自动**切换到对应会话**再定位消息。
+
+#### 问题索引（无搜索词时）
+
+未输入搜索词时，面板默认展示当前会话的**用户提问列表**（Q1、Q2、...），点击可快速跳转到任意提问位置。
+
+---
+
+### 七、字体大小调整
+
+顶部导航栏提供字体大小控制（范围 12–24px，默认 15px）：
+
+| 控件 | 功能 |
+|------|------|
+| **A-** | 缩小字体（每次 -1px） |
+| 中间数字 | 显示当前字体大小 |
+| **A+** | 放大字体（每次 +1px） |
+
+设置自动保存到浏览器本地存储，刷新后保持不变。
+
+---
+
+### 八、主题切换
+
+点击顶部导航栏右侧的 **☀️ / 🌙** 按钮，在浅色和深色模式间切换。主题偏好自动保存到浏览器本地存储，下次访问保持一致。
+
+---
+
+### 九、侧边栏折叠
+
+点击顶部导航栏左侧的 **☰ 按钮**，收起或展开左侧会话列表，获得更宽的阅读区域。
+
+---
+
+## 快捷键总览
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+F` / `Cmd+F` | 打开/关闭搜索面板 |
+| `Escape` | 关闭搜索面板 |
+
+---
+
+## 数据说明
+
+- 所有数据来自本地文件，**不会上传到任何服务器**
+- 源文件路径：`~/.claude/projects/<项目路径>/<session-id>.jsonl`
+- 每个 `.jsonl` 文件对应一次完整的 Claude Code 对话
+- Subagent 数据存储在 `<session-id>/` 子目录中
+
+---
+
+## 技术架构（简要）
+
+| 层次 | 技术 |
+|------|------|
+| 前端 | React 19 + TypeScript + Vite |
+| 状态管理 | Zustand + Immer |
+| 样式 | Tailwind CSS（深色/浅色主题） |
+| 后端 | Node.js 原生 HTTP（无框架，端口 3501） |
+| 语法高亮 | highlight.js（自动语言检测） |
+| Markdown | react-markdown + remark-gfm + rehype-highlight |
+
+---
+
+## 常见问题
+
+**Q：左侧没有加载到我的会话怎么办？**
+
+确认 `~/.claude/projects/` 目录下存在 `.jsonl` 文件，且 API 服务器正在运行（`npm start` 同时启动了服务器和前端）。也可以手动将 `.jsonl` 文件拖入界面导入。
+
+**Q：会话内容显示乱码？**
+
+`.jsonl` 文件需为 UTF-8 编码，且每行为合法 JSON 对象。部分损坏的行会被自动跳过。
+
+**Q：Subagent Tab 不出现？**
+
+仅当会话中存在 Agent 工具调用，且对应的子代理 `.jsonl` 文件存在于 `~/.claude/projects/<项目>/<session-id>/` 子目录时，才会显示 Tab。
+
+**Q：修改了文件但界面没有更新？**
+
+当前版本不支持实时监听文件变化，刷新浏览器页面即可重新加载最新数据。
