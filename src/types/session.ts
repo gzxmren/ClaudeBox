@@ -105,6 +105,12 @@ export interface ProgressRecord extends BaseRecord {
 
 export type RawRecord = UserRecord | AssistantRecord | QueueOperationRecord | ProgressRecord
 
+// Message category for user-role messages
+// 'user'         – genuine human input
+// 'system'       – injected system tags (<system-reminder>, hooks, etc.)
+// 'continuation' – automated "Please continue." style prompts
+export type MessageCategory = 'user' | 'system' | 'continuation'
+
 // Merged message (assistant streaming chunks merged)
 export interface MergedMessage {
   id: string
@@ -114,6 +120,8 @@ export interface MergedMessage {
   role: 'user' | 'assistant'
   content: ContentBlock[]
   rawContent?: string // for user messages that are plain strings
+  category?: MessageCategory // only set for role==='user' messages
+  systemLabel?: string // e.g. "System Reminder", "Hook Feedback"
   model?: string
   usage?: TokenUsage
   stopReason?: string

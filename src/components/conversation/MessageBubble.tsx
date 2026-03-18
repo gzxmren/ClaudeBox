@@ -6,6 +6,60 @@ import { MarkdownRenderer } from '../common/MarkdownRenderer'
 import { formatTimestamp } from '../../utils/formatters'
 import { useSessionStore } from '../../store/useSessionStore'
 
+// ── System / Continuation message: compact collapsible bar ───────────────────
+function SystemMessageBar({ message }: { message: MergedMessage }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const rawText =
+    message.rawContent ??
+    (message.content.length === 1 && message.content[0].type === 'text'
+      ? message.content[0].text
+      : '')
+
+  const preview = rawText.replace(/\n/g, ' ').slice(0, 80)
+  const isContinuation = message.category === 'continuation'
+
+  const labelColor = isContinuation
+    ? 'text-blue-400'
+    : 'text-amber-500'
+
+  const icon = isContinuation ? '↩' : '⚙'
+
+  return (
+    <div className="flex justify-center my-0.5">
+      <div
+        className="w-full max-w-[50%] border border-dashed border-[var(--border)] rounded-md text-[var(--text-muted)] text-xs"
+        style={{ opacity: 0.75 }}
+      >
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex items-center gap-2 w-full px-3 py-1 hover:opacity-100 transition-opacity text-left"
+        >
+          <span className={`font-semibold shrink-0 ${labelColor}`}>
+            {icon} {message.systemLabel ?? 'System'}
+          </span>
+          {!expanded && (
+            <span className="truncate opacity-50">{preview}</span>
+          )}
+          <svg
+            className={`ml-auto shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            width="10" height="10" viewBox="0 0 10 10"
+            fill="none" stroke="currentColor" strokeWidth="1.8"
+          >
+            <polyline points="2,3 5,7 8,3" />
+          </svg>
+        </button>
+
+        {expanded && (
+          <pre className="px-3 pb-2 pt-0 text-[11px] whitespace-pre-wrap break-words opacity-80 border-t border-dashed border-[var(--border)]">
+            {rawText}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   message: MergedMessage
   toolResults: Map<string, { content: string | ContentBlock[]; is_error?: boolean }>
@@ -38,6 +92,11 @@ export function MessageBubble({ message, toolResults, onSubagentClick }: Props) 
   // Check if this is a tool_result message (user record carrying tool results)
   const isToolResult = !isUser ? false : message.content.some(b => b.type === 'tool_result')
   if (isToolResult) return null // Tool results are rendered inline with their tool_use
+
+  // System-injected or auto-continuation messages → compact collapsible bar
+  if (isUser && (message.category === 'system' || message.category === 'continuation')) {
+    return <SystemMessageBar message={message} />
+  }
 
   return (
     <div

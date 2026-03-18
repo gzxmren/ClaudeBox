@@ -42,6 +42,19 @@ npm run preview
 # 访问 http://localhost:3501
 ```
 
+<!-- AUTO-GENERATED: scripts -->
+### 全部可用命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm start` | 同时启动 API 服务器（端口 3501）和 Vite 开发服务器 |
+| `npm run dev` | 仅启动 Vite 开发服务器（不含 API 服务器） |
+| `npm run build` | TypeScript 检查 + Vite 生产构建 → `dist/` |
+| `npm run preview` | 以生产模式通过 `server.mjs` 提供服务 |
+| `npm run server` | 仅启动 API 服务器（端口 3501） |
+| `npm run lint` | 对所有源文件执行 ESLint 检查 |
+<!-- /AUTO-GENERATED: scripts -->
+
 ---
 
 ## 界面总览
@@ -128,6 +141,7 @@ npm run preview
 |------|------|
 | 右对齐，蓝色发送者名 | 用户（**You**）消息 |
 | 左对齐，绿色发送者名 | Claude 消息 |
+| 居中，虚线边框细条 | 系统注入消息（`⚙ System Reminder`、`↩ Auto Continue` 等），默认折叠，点击展开 |
 
 - 每条气泡宽度**不超过内容区域的 50%**，保持双栏对话视觉清晰
 - 发送者名称（**You** / **Claude**）以粗体加大显示，一眼识别发送方
@@ -299,6 +313,16 @@ Claude 的思考过程默认折叠，点击标题展开查看完整推理链。
 | 后端 | Node.js 原生 HTTP（无框架，端口 3501） |
 | 语法高亮 | highlight.js（自动语言检测） |
 | Markdown | react-markdown + remark-gfm + rehype-highlight |
+
+---
+
+<!-- AUTO-GENERATED: env -->
+## 环境变量
+
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `PORT` | 否 | `3501` | API 服务器（`server.mjs`）监听端口 |
+<!-- /AUTO-GENERATED: env -->
 
 ---
 
