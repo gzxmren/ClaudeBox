@@ -5,13 +5,18 @@ import { SubagentThread } from '../subagent/SubagentThread'
 import { MessageThread } from '../conversation/MessageThread'
 
 export function MainContent() {
-  const getActiveSession = useSessionStore(s => s.getActiveSession)
+  const session = useSessionStore(s => {
+    if (!s.activeSessionId) return null
+    for (const p of s.projects) {
+      const found = p.sessions.find(sess => sess.id === s.activeSessionId)
+      if (found) return found
+    }
+    return null
+  })
   const activeTab = useSessionStore(s => s.activeTab)
   const setActiveTab = useSessionStore(s => s.setActiveTab)
   const loading = useSessionStore(s => s.loading)
   const error = useSessionStore(s => s.error)
-
-  const session = getActiveSession()
 
   if (loading) {
     return (

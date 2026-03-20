@@ -3,6 +3,7 @@ import type {
   AssistantRecord,
   UserRecord,
   MergedMessage,
+  MessageCategory,
   ContentBlock,
   SessionStats,
   Session,
@@ -23,6 +24,43 @@ export function parseJsonlLines(text: string): RawRecord[] {
   return records
 }
 
+// Maps known XML tag names to human-readable labels
+const SYSTEM_TAG_LABELS: Record<string, string> = {
+  'system-reminder': 'System Reminder',
+  'user-prompt-submit-hook': 'Hook Feedback',
+  'command-name': 'Command',
+  'antml:function_calls': 'Tool Calls',
+}
+
+const SYSTEM_TAG_RE = /<([a-z][a-z0-9-]*)[\s>]/i
+
+function detectUserMessageCategory(
+  content: ContentBlock[],
+  rawContent?: string
+): { category: MessageCategory; systemLabel?: string } {
+  const text = rawContent ??
+    (content.length === 1 && content[0].type === 'text' ? content[0].text : undefined)
+
+  if (text) {
+    const trimmed = text.trim()
+
+    // Detect XML-style system injection tags
+    const match = SYSTEM_TAG_RE.exec(trimmed)
+    if (match && trimmed.startsWith('<')) {
+      const tagName = match[1].toLowerCase()
+      const label = SYSTEM_TAG_LABELS[tagName] ?? 'System Injection'
+      return { category: 'system', systemLabel: label }
+    }
+
+    // Detect automated continuation prompts
+    if (/^(please continue\.?|continue\.?|proceed\.?|ok\.)$/i.test(trimmed)) {
+      return { category: 'continuation', systemLabel: 'Auto Continue' }
+    }
+  }
+
+  return { category: 'user' }
+}
+
 function extractUserContent(record: UserRecord): { content: ContentBlock[]; rawContent?: string } {
   const msg = record.message
   if (typeof msg.content === 'string') {
@@ -39,10 +77,14 @@ export function mergeRecords(records: RawRecord[]): MergedMessage[] {
   const assistantGroups = new Map<string, AssistantRecord[]>()
   const assistantOrder: string[] = []
 
-  for (const rec of records) {
+  // Filter out sidechain records (abandoned branches from undo operations)
+  const mainRecords = records.filter(r => !r.isSidechain)
+
+  for (const rec of mainRecords) {
     if (rec.type === 'user') {
       const user = rec as UserRecord
       const { content, rawContent } = extractUserContent(user)
+      const { category, systemLabel } = detectUserMessageCategory(content, rawContent)
       messages.push({
         id: user.uuid,
         uuid: user.uuid,
@@ -51,6 +93,8 @@ export function mergeRecords(records: RawRecord[]): MergedMessage[] {
         role: 'user',
         content,
         rawContent,
+        category,
+        systemLabel,
       })
     } else if (rec.type === 'assistant') {
       const asst = rec as AssistantRecord

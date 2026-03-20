@@ -18,11 +18,18 @@ interface SessionState {
   searchFilter: 'all' | 'user' | 'assistant' | 'tool'
   searchIndex: SearchIndex | null
   searchPanelOpen: boolean
+  // Global search (B1)
+  globalSearchMode: boolean
+  globalSearchIndex: SearchIndex | null
+
+  // Session filter (B2)
+  sessionFilter: string
 
   // UI
   theme: 'dark' | 'light'
   sidebarCollapsed: boolean
   highlightedMessageId: string | null
+  messageFontSize: number
 
   // Actions
   loadFromServer: () => Promise<void>
@@ -32,11 +39,15 @@ interface SessionState {
   setSearchQuery: (query: string) => void
   setSearchFilter: (filter: 'all' | 'user' | 'assistant' | 'tool') => void
   toggleSearchPanel: () => void
+  toggleGlobalSearchMode: () => void
+  setSessionFilter: (filter: string) => void
   toggleTheme: () => void
   toggleSidebar: () => void
-  scrollToMessage: (messageId: string) => void
+  scrollToMessage: (messageId: string, delay?: number) => void
+  setMessageFontSize: (size: number) => void
   getActiveSession: () => Session | null
   getUserQuestionsList: () => { id: string; text: string; timestamp: string }[]
+  getFilteredProjects: () => Project[]
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -52,10 +63,15 @@ export const useSessionStore = create<SessionState>()(
     searchFilter: 'all',
     searchIndex: null,
     searchPanelOpen: false,
+    globalSearchMode: false,
+    globalSearchIndex: null,
+
+    sessionFilter: '',
 
     theme: (typeof window !== 'undefined' && localStorage.getItem('theme') as 'dark' | 'light') || 'dark',
     sidebarCollapsed: false,
     highlightedMessageId: null,
+    messageFontSize: (typeof window !== 'undefined' && Number(localStorage.getItem('messageFontSize'))) || 15,
 
     loadFromServer: async () => {
       set(s => { s.loading = true; s.error = null })
@@ -69,15 +85,11 @@ export const useSessionStore = create<SessionState>()(
             s.activeSessionId = projects[0].sessions[0].id
           }
         })
-        // Build search index for selected session
-        const state = get()
-        if (state.activeSessionId) {
-          const session = findSession(state.projects, state.activeSessionId)
-          if (session) {
-            const idx = buildSearchIndex(session.id, session.messages)
-            set(s => { s.searchIndex = idx })
-          }
-        }
+        const { searchIndex, globalSearchIndex } = computeIndexes(get().projects, get().activeSessionId)
+        set(s => {
+          if (searchIndex) s.searchIndex = searchIndex
+          s.globalSearchIndex = globalSearchIndex
+        })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
       }
@@ -102,6 +114,11 @@ export const useSessionStore = create<SessionState>()(
           if (sessions.length > 0) {
             s.activeSessionId = sessions[0].id
           }
+        })
+        const { searchIndex, globalSearchIndex } = computeIndexes(get().projects, get().activeSessionId)
+        set(s => {
+          if (searchIndex) s.searchIndex = searchIndex
+          s.globalSearchIndex = globalSearchIndex
         })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
@@ -132,21 +149,35 @@ export const useSessionStore = create<SessionState>()(
 
     setSearchQuery: (query) => {
       const state = get()
-      const results = state.searchIndex
-        ? doSearch(query, state.searchIndex, state.searchFilter)
+      const activeIndex = state.globalSearchMode ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex
+        ? doSearch(query, activeIndex, state.searchFilter)
         : []
       set(s => { s.searchQuery = query; s.searchResults = results })
     },
 
     setSearchFilter: (filter) => {
       const state = get()
-      const results = state.searchIndex
-        ? doSearch(state.searchQuery, state.searchIndex, filter)
+      const activeIndex = state.globalSearchMode ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex
+        ? doSearch(state.searchQuery, activeIndex, filter)
         : []
       set(s => { s.searchFilter = filter; s.searchResults = results })
     },
 
     toggleSearchPanel: () => set(s => { s.searchPanelOpen = !s.searchPanelOpen }),
+
+    toggleGlobalSearchMode: () => {
+      const state = get()
+      const next = !state.globalSearchMode
+      const activeIndex = next ? state.globalSearchIndex : state.searchIndex
+      const results = activeIndex && state.searchQuery
+        ? doSearch(state.searchQuery, activeIndex, state.searchFilter)
+        : []
+      set(s => { s.globalSearchMode = next; s.searchResults = results })
+    },
+
+    setSessionFilter: (filter) => set(s => { s.sessionFilter = filter }),
 
     toggleTheme: () => set(s => {
       s.theme = s.theme === 'dark' ? 'light' : 'dark'
@@ -158,17 +189,23 @@ export const useSessionStore = create<SessionState>()(
 
     toggleSidebar: () => set(s => { s.sidebarCollapsed = !s.sidebarCollapsed }),
 
-    scrollToMessage: (messageId) => {
+    setMessageFontSize: (size) => set(s => {
+      const clamped = Math.max(12, Math.min(24, size))
+      s.messageFontSize = clamped
+      if (typeof window !== 'undefined') localStorage.setItem('messageFontSize', String(clamped))
+    }),
+
+    scrollToMessage: (messageId, delay = 50) => {
       set(s => { s.highlightedMessageId = messageId })
-      // Scroll to element
+      // Use a longer delay for cross-session navigation (session switch triggers
+      // a full MessageThread re-render; 50ms is not enough for large sessions).
       setTimeout(() => {
         const el = document.getElementById(`msg-${messageId}`)
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          // Clear highlight after animation
           setTimeout(() => set(s => { s.highlightedMessageId = null }), 2000)
         }
-      }, 50)
+      }, delay)
     },
 
     getActiveSession: () => {
@@ -183,6 +220,11 @@ export const useSessionStore = create<SessionState>()(
       if (!session) return []
       return getUserQuestions(session.messages)
     },
+
+    getFilteredProjects: () => {
+      const state = get()
+      return filterProjects(state.projects, state.sessionFilter)
+    },
   }))
 )
 
@@ -192,4 +234,36 @@ function findSession(projects: Project[], id: string): Session | null {
     if (s) return s
   }
   return null
+}
+
+// Builds session searchIndex + global searchIndex in a single pass, avoiding
+// double-indexing the active session.
+function computeIndexes(
+  projects: Project[],
+  activeSessionId: string | null,
+): { searchIndex: SearchIndex | null; globalSearchIndex: SearchIndex } {
+  const globalEntries: SearchIndex['entries'] = []
+  let searchIndex: SearchIndex | null = null
+  for (const p of projects) {
+    for (const s of p.sessions) {
+      const idx = buildSearchIndex(s.id, s.messages)
+      globalEntries.push(...idx.entries)
+      if (s.id === activeSessionId) searchIndex = idx
+    }
+  }
+  return { searchIndex, globalSearchIndex: { entries: globalEntries } }
+}
+
+export function filterProjects(projects: Project[], sessionFilter: string): Project[] {
+  const filter = sessionFilter.toLowerCase().trim()
+  if (!filter) return projects
+  return projects
+    .map(p => ({
+      ...p,
+      sessions: p.sessions.filter(s => {
+        const title = (s.slug || s.messages.find(m => m.role === 'user' && !m.content.some(b => b.type === 'tool_result'))?.rawContent || '').toLowerCase()
+        return title.includes(filter) || p.decodedPath.toLowerCase().includes(filter)
+      }),
+    }))
+    .filter(p => p.sessions.length > 0)
 }
