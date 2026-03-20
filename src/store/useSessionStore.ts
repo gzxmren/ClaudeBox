@@ -85,20 +85,11 @@ export const useSessionStore = create<SessionState>()(
             s.activeSessionId = projects[0].sessions[0].id
           }
         })
-        // Build search index for selected session + global index
-        const state = get()
-        if (state.activeSessionId) {
-          const session = findSession(state.projects, state.activeSessionId)
-          if (session) {
-            const idx = buildSearchIndex(session.id, session.messages)
-            set(s => { s.searchIndex = idx })
-          }
-        }
-        // Build global index across all sessions
-        const globalEntries = get().projects.flatMap(p =>
-          p.sessions.flatMap(s => buildSearchIndex(s.id, s.messages).entries)
-        )
-        set(s => { s.globalSearchIndex = { entries: globalEntries } })
+        const { searchIndex, globalSearchIndex } = computeIndexes(get().projects, get().activeSessionId)
+        set(s => {
+          if (searchIndex) s.searchIndex = searchIndex
+          s.globalSearchIndex = globalSearchIndex
+        })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
       }
@@ -124,20 +115,11 @@ export const useSessionStore = create<SessionState>()(
             s.activeSessionId = sessions[0].id
           }
         })
-        // Rebuild search index for the newly selected session
-        const state = get()
-        if (state.activeSessionId) {
-          const session = findSession(state.projects, state.activeSessionId)
-          if (session) {
-            const idx = buildSearchIndex(session.id, session.messages)
-            set(s => { s.searchIndex = idx })
-          }
-        }
-        // Rebuild global index to include newly imported sessions
-        const globalEntries = get().projects.flatMap(p =>
-          p.sessions.flatMap(s => buildSearchIndex(s.id, s.messages).entries)
-        )
-        set(s => { s.globalSearchIndex = { entries: globalEntries } })
+        const { searchIndex, globalSearchIndex } = computeIndexes(get().projects, get().activeSessionId)
+        set(s => {
+          if (searchIndex) s.searchIndex = searchIndex
+          s.globalSearchIndex = globalSearchIndex
+        })
       } catch (e) {
         set(s => { s.loading = false; s.error = (e as Error).message })
       }
@@ -241,17 +223,7 @@ export const useSessionStore = create<SessionState>()(
 
     getFilteredProjects: () => {
       const state = get()
-      const filter = state.sessionFilter.toLowerCase().trim()
-      if (!filter) return state.projects
-      return state.projects
-        .map(p => ({
-          ...p,
-          sessions: p.sessions.filter(s => {
-            const title = (s.slug || s.messages.find(m => m.role === 'user' && !m.content.some(b => b.type === 'tool_result'))?.rawContent || '').toLowerCase()
-            return title.includes(filter) || p.decodedPath.toLowerCase().includes(filter)
-          }),
-        }))
-        .filter(p => p.sessions.length > 0)
+      return filterProjects(state.projects, state.sessionFilter)
     },
   }))
 )
@@ -262,4 +234,36 @@ function findSession(projects: Project[], id: string): Session | null {
     if (s) return s
   }
   return null
+}
+
+// Builds session searchIndex + global searchIndex in a single pass, avoiding
+// double-indexing the active session.
+function computeIndexes(
+  projects: Project[],
+  activeSessionId: string | null,
+): { searchIndex: SearchIndex | null; globalSearchIndex: SearchIndex } {
+  const globalEntries: SearchIndex['entries'] = []
+  let searchIndex: SearchIndex | null = null
+  for (const p of projects) {
+    for (const s of p.sessions) {
+      const idx = buildSearchIndex(s.id, s.messages)
+      globalEntries.push(...idx.entries)
+      if (s.id === activeSessionId) searchIndex = idx
+    }
+  }
+  return { searchIndex, globalSearchIndex: { entries: globalEntries } }
+}
+
+export function filterProjects(projects: Project[], sessionFilter: string): Project[] {
+  const filter = sessionFilter.toLowerCase().trim()
+  if (!filter) return projects
+  return projects
+    .map(p => ({
+      ...p,
+      sessions: p.sessions.filter(s => {
+        const title = (s.slug || s.messages.find(m => m.role === 'user' && !m.content.some(b => b.type === 'tool_result'))?.rawContent || '').toLowerCase()
+        return title.includes(filter) || p.decodedPath.toLowerCase().includes(filter)
+      }),
+    }))
+    .filter(p => p.sessions.length > 0)
 }

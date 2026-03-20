@@ -1,26 +1,11 @@
-import { useSessionStore } from '../../store/useSessionStore'
+import { useSessionStore, filterProjects } from '../../store/useSessionStore'
 import { SessionList } from '../session/SessionList'
 
 export function Sidebar() {
   const collapsed = useSessionStore(s => s.sidebarCollapsed)
   const sessionFilter = useSessionStore(s => s.sessionFilter)
   const setSessionFilter = useSessionStore(s => s.setSessionFilter)
-  // Compute filtered projects inline so Zustand re-renders when sessionFilter
-  // or projects change (selecting the function reference would never trigger
-  // re-renders, as the reference itself never changes).
-  const filteredProjects = useSessionStore(s => {
-    const filter = s.sessionFilter.toLowerCase().trim()
-    if (!filter) return s.projects
-    return s.projects
-      .map(p => ({
-        ...p,
-        sessions: p.sessions.filter(sess => {
-          const title = (sess.slug || sess.messages.find(m => m.role === 'user' && !m.content.some(b => b.type === 'tool_result'))?.rawContent || '').toLowerCase()
-          return title.includes(filter) || p.decodedPath.toLowerCase().includes(filter)
-        }),
-      }))
-      .filter(p => p.sessions.length > 0)
-  })
+  const filteredProjects = useSessionStore(s => filterProjects(s.projects, s.sessionFilter))
 
   return (
     <aside
